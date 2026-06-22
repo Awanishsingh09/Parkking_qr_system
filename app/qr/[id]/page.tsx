@@ -38,7 +38,7 @@ export default async function QRPage({ params }: PageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-[#0B0F19] bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-900 via-[#0B0F19] to-black flex flex-col justify-between py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#0B0F19] bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-900 via-[#0B0F19] to-black flex flex-col justify-between py-12 px-4 sm:px-6 lg:px-8 w-full max-w-full overflow-x-hidden box-border">
       {/* Top Brand Navbar */}
       <header className="max-w-md mx-auto w-full flex items-center justify-between mb-8">
         <Link 

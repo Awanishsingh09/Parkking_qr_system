@@ -16,7 +16,11 @@ import {
   PhoneCall, 
   Share2,
   Calendar,
-  Sparkles
+  Sparkles,
+  Shield,
+  ChevronDown,
+  ChevronUp,
+  Lock
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -31,6 +35,29 @@ interface QRCodeData {
   registered_at?: string;
 }
 
+const maskPhone = (phone?: string) => {
+  if (!phone) return '';
+  const trimmed = phone.trim();
+  
+  if (trimmed.startsWith('+')) {
+    const hasSpace = trimmed.indexOf(' ') > 0;
+    if (hasSpace) {
+      const parts = trimmed.split(' ');
+      const countryCode = parts[0];
+      const mainNumber = parts.slice(1).join(' ');
+      if (mainNumber.length > 4) {
+        return `${countryCode} ${'•'.repeat(mainNumber.length - 3)}${mainNumber.slice(-3)}`;
+      }
+    }
+    return `${trimmed.slice(0, 4)}${'•'.repeat(Math.max(0, trimmed.length - 7))}${trimmed.slice(-3)}`;
+  } else {
+    if (trimmed.length > 6) {
+      return `${trimmed.slice(0, 2)}${'•'.repeat(trimmed.length - 5)}${trimmed.slice(-3)}`;
+    }
+    return '••••••' + trimmed.slice(-3);
+  }
+};
+
 export default function QRScannerClient({ 
   id, 
   initialData 
@@ -42,6 +69,7 @@ export default function QRScannerClient({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
 
   // Form Fields
   const [ownerName, setOwnerName] = useState('');
@@ -49,12 +77,12 @@ export default function QRScannerClient({
   const [carNumber, setCarNumber] = useState('');
   const [vehicleType, setVehicleType] = useState('car');
 
-  // Trigger scan increment on mount if QR is active
+  // Trigger scan increment on mount if QR is active when opened
   useEffect(() => {
-    if (data.status === 'active') {
+    if (initialData.status === 'active') {
       incrementScan(id);
     }
-  }, [id, data.status]);
+  }, [id, initialData.status]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,7 +136,7 @@ export default function QRScannerClient({
         <div className="mx-auto w-16 h-16 bg-red-950/50 border border-red-500/30 rounded-2xl flex items-center justify-center mb-6">
           <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />
         </div>
-        <h2 className="text-2xl font-bold text-white mb-2">QR Code Deactivated</h2>
+        <h2 className="text-2xl font-bold text-white mb-2">Sticker Disabled</h2>
         <p className="text-slate-400 text-sm mb-6 leading-relaxed">
           This QR code has been disabled by the administrator or the vehicle owner.
           Please contact support if you believe this is a mistake.
@@ -245,11 +273,13 @@ export default function QRScannerClient({
 
   // 3. REGISTERED / ACTIVE STATE
   return (
-    <div className="w-full max-w-md p-6 bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl shadow-2xl relative overflow-hidden text-slate-100">
-      <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-teal-500 to-cyan-500" />
-      
+    <div className="w-full max-w-md flex flex-col gap-4 relative overflow-x-hidden text-slate-100 box-border px-0.5">
+      {/* Background ambient light effects */}
+      <div className="absolute -top-16 -left-16 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-16 -right-16 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+
       {success && (
-        <div className="mb-6 p-4 bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 rounded-2xl text-sm flex items-start gap-2.5 animate-bounce">
+        <div className="p-4 bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 rounded-2xl text-sm flex items-start gap-2.5 animate-bounce shadow-lg shadow-emerald-950/20 box-border">
           <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5 text-emerald-400" />
           <div>
             <span className="font-bold block">Successfully Linked!</span>
@@ -258,76 +288,176 @@ export default function QRScannerClient({
         </div>
       )}
 
-      {/* Header section with vehicle image/icon */}
-      <div className="flex items-center gap-4 mb-6">
-        <div className="w-14 h-14 bg-teal-500/10 border border-teal-500/25 rounded-2xl flex items-center justify-center text-teal-400">
-          {getVehicleIcon(data.vehicle_type, "w-8 h-8")}
+      {/* 1. HERO SECTION: COMPACT PASSPORT CARD */}
+      <div className="relative overflow-hidden rounded-[20px] bg-gradient-to-br from-slate-900/90 via-[#0D1527]/95 to-slate-950/90 border border-slate-800/80 p-4.5 shadow-xl group transition-all duration-500 hover:border-cyan-500/30 box-border">
+        {/* Subtle diagonal background mesh pattern */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#080e1a_1px,transparent_1px),linear-gradient(to_bottom,#080e1a_1px,transparent_1px)] bg-[size:14px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-20 pointer-events-none" />
+        
+        {/* Glowing border/accent highlights */}
+        <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent" />
+        
+        {/* Card Header: Badges */}
+        <div className="flex justify-between items-center mb-3.5 relative z-10">
+          <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-[9px] font-extrabold uppercase tracking-wider text-cyan-400 shadow-sm">
+            <Shield className="w-3 h-3 text-cyan-400" />
+            <span>Verified Owner</span>
+          </div>
+          
+          <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-extrabold uppercase tracking-wider text-emerald-400 shadow-sm">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+            </span>
+            <span>Active</span>
+          </div>
         </div>
-        <div>
-          <h2 className="text-xl font-extrabold text-white uppercase tracking-wide">
-            {data.car_number}
-          </h2>
-          <div className="flex items-center gap-1.5 mt-1 text-slate-400 text-xs font-medium">
-            <User className="w-3.5 h-3.5 text-slate-500" />
-            <span>Owner: {data.owner_name}</span>
+
+        {/* Card Body: Profile Row (Vehicle Icon, Owner Details & License Plate) */}
+        <div className="flex items-center justify-between gap-3 relative z-10">
+          {/* Owner details */}
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 bg-slate-950/60 border border-slate-800 rounded-xl flex items-center justify-center text-cyan-400">
+              {getVehicleIcon(data.vehicle_type, "w-5.5 h-5.5 text-cyan-400")}
+            </div>
+            <div className="text-left">
+              <div className="text-[9px] text-slate-500 font-extrabold uppercase tracking-wider">VEHICLE OWNER</div>
+              <div className="text-sm font-extrabold text-white">{data.owner_name}</div>
+            </div>
+          </div>
+
+          {/* Compact Plate Number */}
+          <div className="bg-slate-950 border border-slate-800 rounded-xl py-1.5 px-3 font-mono text-center shadow-inner">
+            <div className="text-[8px] text-slate-600 font-bold uppercase tracking-wider mb-0.5">PLATE</div>
+            <div className="text-sm font-extrabold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-300 uppercase">
+              {data.car_number}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="bg-slate-950/40 border border-slate-850 rounded-2xl p-4 mb-6 space-y-3.5">
-        <div className="flex justify-between items-center text-xs">
-          <span className="text-slate-500">Vehicle Type</span>
-          <span className="font-semibold text-slate-300 capitalize">{data.vehicle_type}</span>
-        </div>
-        <div className="h-px bg-slate-850/50" />
-        <div className="flex justify-between items-center text-xs">
-          <span className="text-slate-500">Status</span>
-          <span className="flex items-center gap-1 font-semibold text-teal-400">
-            <span className="w-2 h-2 rounded-full bg-teal-500 animate-ping inline-block" />
-            Active & Reachable
-          </span>
-        </div>
-        {data.registered_at && (
-          <>
-            <div className="h-px bg-slate-850/50" />
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-500">Registered On</span>
-              <span className="text-slate-400 flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-slate-600" />
-                {new Date(data.registered_at).toLocaleDateString(undefined, {
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric'
-                })}
-              </span>
-            </div>
-          </>
-        )}
-      </div>
-
-      <div className="space-y-4">
-        {/* Call Button */}
+      {/* 2. QUICK CONTACT SECTION (HIGH PRIORITY - 56PX BUTTONS) */}
+      <div className="flex flex-col gap-3">
+        {/* Call Owner Button */}
         <a
           href={`tel:${data.phone}`}
-          className="flex items-center justify-center gap-3 w-full bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-200 hover:text-white font-bold py-3.5 px-4 rounded-xl transition-all shadow-md active:scale-[0.98]"
+          className="flex items-center justify-center gap-3 w-full h-[56px] min-h-[56px] bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-slate-950 font-extrabold text-sm rounded-[16px] transition-all shadow-lg hover:shadow-cyan-500/20 active:scale-[0.98] cursor-pointer box-border"
         >
-          <PhoneCall className="w-5 h-5 text-teal-400" />
+          <PhoneCall className="w-6 h-6 text-slate-950" />
           Call Owner
         </a>
 
-        {/* WhatsApp Button */}
+        {/* WhatsApp Owner Button */}
         <a
           href={`https://wa.me/${data.phone?.replace(/[^0-9]/g, '')}?text=Hi%2C%20I%20am%20near%20your%20vehicle%20(${data.car_number}).%20Could%20you%20please%20check%20on%20it%3F%20(Sent%20via%20ParkPing)`}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center justify-center gap-3 w-full bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-650 hover:to-green-650 text-slate-950 font-bold py-3.5 px-4 rounded-xl transition-all shadow-md active:scale-[0.98] cursor-pointer"
+          className="flex items-center justify-center gap-3 w-full h-[56px] min-h-[56px] bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-650 hover:to-green-650 text-slate-950 font-extrabold text-sm rounded-[16px] transition-all shadow-lg hover:shadow-emerald-500/20 active:scale-[0.98] cursor-pointer box-border"
         >
-          <MessageSquare className="w-5 h-5 fill-slate-950 text-transparent" />
+          <MessageSquare className="w-6 h-6 fill-slate-950 text-transparent" />
           WhatsApp Owner
+        </a>
+
+        {/* Send SMS Button */}
+        <a
+          href={`sms:${data.phone}?body=${encodeURIComponent("Hello, your vehicle may be blocking access or requires your attention. I found your ParkPing sticker and am trying to reach you. Please check your vehicle.\n")}`}
+          className="flex items-center justify-center gap-3 w-full h-[56px] min-h-[56px] bg-slate-900/60 hover:bg-slate-900/90 border border-slate-800 text-slate-200 font-extrabold text-sm rounded-[16px] transition-all shadow-md active:scale-[0.98] box-border"
+        >
+          <MessageSquare className="w-6 h-6 text-sky-400" />
+          Send SMS
         </a>
       </div>
 
-      <div className="mt-8 text-center text-[10px] text-slate-600 flex items-center justify-center gap-1">
+      {/* 3. VEHICLE DETAILS COLLAPSIBLE ACCORDION */}
+      <div className="flex flex-col gap-2">
+        <button
+          onClick={() => setDetailsExpanded(!detailsExpanded)}
+          className="w-full flex justify-between items-center bg-slate-900/40 backdrop-blur-md border border-slate-850 rounded-[16px] p-4 text-xs text-slate-400 font-bold tracking-wider hover:bg-slate-900/65 transition-all duration-300 active:scale-[0.99] cursor-pointer box-border"
+        >
+          <span className="flex items-center gap-2.5">
+            {getVehicleIcon(data.vehicle_type, "w-4 h-4 text-cyan-400")}
+            <span>VEHICLE DETAILS</span>
+          </span>
+          {detailsExpanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+        </button>
+
+        {detailsExpanded && (
+          <div className="bg-slate-900/25 backdrop-blur-md border border-slate-850 rounded-[16px] p-4.5 space-y-3.5 transition-all duration-300 animate-[fadeIn_0.2s_ease-out] box-border">
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-slate-400">Vehicle Type</span>
+              <span className="font-semibold text-slate-200 capitalize flex items-center gap-1.5">
+                <span className="text-cyan-400/80">{getVehicleIcon(data.vehicle_type, "w-4 h-4")}</span>
+                {data.vehicle_type}
+              </span>
+            </div>
+
+            {data.phone && (
+              <>
+                <div className="h-px bg-slate-800/40" />
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-400">Contact Number</span>
+                  <span className="font-semibold text-slate-200 flex items-center gap-1.5">
+                    <Smartphone className="w-3.5 h-3.5 text-cyan-400/80" />
+                    {maskPhone(data.phone)}
+                  </span>
+                </div>
+              </>
+            )}
+
+            <div className="h-px bg-slate-800/40" />
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-slate-400">Contact Availability</span>
+              <span className="font-semibold text-emerald-400 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                24/7 Secure Routing
+              </span>
+            </div>
+
+            {data.registered_at && (
+              <>
+                <div className="h-px bg-slate-800/40" />
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-400">Registration Date</span>
+                  <span className="text-slate-300 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                    {new Date(data.registered_at).toLocaleDateString(undefined, {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric'
+                    })}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 4. TRUST & SECURITY INFO CARD */}
+      <div className="p-4.5 rounded-[16px] bg-slate-900/40 backdrop-blur-md border border-slate-850/80 shadow-lg relative overflow-hidden box-border">
+        <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-500/5 rounded-full blur-2xl pointer-events-none" />
+        <div className="flex items-start gap-3.5">
+          <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 flex-shrink-0">
+            <Shield className="w-4.5 h-4.5 text-cyan-400" />
+          </div>
+          <div className="text-left flex-grow">
+            <div className="text-xs font-bold text-slate-200">Verified Vehicle Owner</div>
+            <div className="text-[9px] text-slate-500 mt-0.5 uppercase tracking-wider font-bold">Protected by ParkPing</div>
+            <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
+              Your contact details are encrypted and hidden. Communication is initiated safely without exposing your number.
+            </p>
+            <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-800/60 text-[9px] text-slate-500 font-bold tracking-wider uppercase">
+              <span className="flex items-center gap-1">
+                <Lock className="w-3 h-3 text-cyan-400" /> Secure Routing
+              </span>
+              <span className="flex items-center gap-1">
+                <Shield className="w-3 h-3 text-cyan-400" /> Encrypted Info
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 text-center text-[10px] text-slate-600 flex items-center justify-center gap-1">
         <span className="font-semibold text-slate-500">ParkPing Security</span>
         <span>•</span>
         <span>Scan tracked for security logs</span>

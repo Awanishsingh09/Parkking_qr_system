@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation';
 import { adminLogout } from '../actions';
 import { bulkGenerateQRs, toggleQRStatus, deleteQR } from './actions';
 import QRCode from 'qrcode';
+import { jsPDF } from 'jspdf';
 import { 
   Plus, 
   Search, 
   Download, 
+  FileDown,
   Trash2, 
   Check, 
   X, 
@@ -49,6 +51,134 @@ interface DashboardStats {
   totalScans: number;
 }
 
+const generateStickerCanvas = (id: string, url: string): Promise<HTMLCanvasElement> => {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1200;
+    canvas.height = 1500;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      reject(new Error('Could not get canvas context'));
+      return;
+    }
+
+    // 1. Fill background with white
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 1200, 1500);
+
+    const margin = 50;
+    const width = 1100;
+    const height = 1400;
+    const radius = 60;
+
+    // 2. Draw card border
+    ctx.strokeStyle = '#0f172a'; // dark navy
+    ctx.lineWidth = 16;
+    ctx.beginPath();
+    ctx.roundRect(margin, margin, width, height, radius);
+    ctx.stroke();
+
+    // 3. Draw header bar (top section)
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.roundRect(margin + 8, margin + 8, width - 16, 250, [radius - 8, radius - 8, 0, 0]);
+    ctx.fill();
+
+    // 4. Draw ParkPing Logo in header bar
+    const logoX = 250;
+    const logoY = 175;
+    
+    // Emblem: Circle in Amber/Gold
+    ctx.fillStyle = '#f59e0b';
+    ctx.beginPath();
+    ctx.arc(logoX, logoY, 45, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Letter 'P' inside circle
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 55px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('P', logoX, logoY);
+
+    // WiFi waves (ping) on logo
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 8;
+    ctx.lineCap = 'round';
+    
+    // Wave 1
+    ctx.beginPath();
+    ctx.arc(logoX, logoY, 65, -Math.PI / 4, Math.PI / 4);
+    ctx.stroke();
+    // Wave 2
+    ctx.beginPath();
+    ctx.arc(logoX, logoY, 85, -Math.PI / 4, Math.PI / 4);
+    ctx.stroke();
+
+    // Logo text "ParkPing"
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 80px Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('ParkPing', logoX + 110, logoY);
+
+    // 5. Generate and Draw QR Code
+    QRCode.toDataURL(url, {
+      width: 700,
+      margin: 1,
+      color: {
+        dark: '#0f172a',
+        light: '#ffffff'
+      }
+    }, (err, qrDataUrl) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+
+      const img = new Image();
+      img.onload = () => {
+        // Draw light grey background frame for the QR Code
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.roundRect(225, 400, 750, 750, 40);
+        ctx.fill();
+        
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        // Draw QR Code inside the frame
+        ctx.drawImage(img, 250, 425, 700, 700);
+
+        // 6. Draw Sticker ID
+        ctx.fillStyle = '#64748b';
+        ctx.font = 'bold 36px Courier, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const displayId = id.toUpperCase();
+        ctx.fillText(`ID: ${displayId}`, 600, 1220);
+
+        // 7. Draw Scan to Contact Owner text
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 46px Arial, sans-serif';
+        ctx.fillText('SCAN TO CONTACT VEHICLE OWNER', 600, 1310);
+
+        // Tagline / safety notice
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '500 28px Arial, sans-serif';
+        ctx.fillText('Secure & Anonymous • ParkPing.com', 600, 1370);
+
+        resolve(canvas);
+      };
+      img.onerror = () => {
+        reject(new Error('Failed to load QR code image'));
+      };
+      img.src = qrDataUrl;
+    });
+  });
+};
+
 export default function DashboardClient({
   initialQRCodes,
   stats
@@ -59,6 +189,15 @@ export default function DashboardClient({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [qrCodes, setQrCodes] = useState<QRCodeRow[]>(initialQRCodes);
+
+  // Compute metrics dynamically from the state so they update instantly on status changes and deletion
+  const currentStats = {
+    total: qrCodes.length,
+    active: qrCodes.filter((x) => x.status === 'active').length,
+    unregistered: qrCodes.filter((x) => x.status === 'unregistered').length,
+    inactive: qrCodes.filter((x) => x.status === 'inactive').length,
+    totalScans: qrCodes.reduce((acc, x) => acc + (x.scan_count || 0), 0),
+  };
 
   // Search & Filtering States
   const [searchTerm, setSearchTerm] = useState('');
@@ -144,30 +283,46 @@ export default function DashboardClient({
   const handleDownloadPNG = async (id: string, carNumber: string | null) => {
     try {
       const url = `${window.location.origin}/qr/${id}`;
+      const canvas = await generateStickerCanvas(id, url);
+      const pngUrl = canvas.toDataURL('image/png');
       
-      // Setup QR rendering options
-      const qrDataUrl = await QRCode.toDataURL(url, {
-        width: 1000,
-        margin: 2,
-        color: {
-          dark: '#000000',
-          light: '#ffffff'
-        }
-      });
-
       const filename = carNumber ? `parkping-${carNumber.toLowerCase()}.png` : `parkping-${id.slice(0, 8)}.png`;
 
       // Trigger download
       const link = document.createElement('a');
-      link.href = qrDataUrl;
+      link.href = pngUrl;
       link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      triggerNotice('QR PNG downloaded successfully.');
+      triggerNotice('Printable sticker PNG downloaded successfully.');
     } catch (err) {
       console.error(err);
-      triggerNotice('Error exporting QR code PNG.', 'error');
+      triggerNotice('Error exporting sticker PNG.', 'error');
+    }
+  };
+
+  const handleDownloadPDF = async (id: string, carNumber: string | null) => {
+    try {
+      const url = `${window.location.origin}/qr/${id}`;
+      const canvas = await generateStickerCanvas(id, url);
+      const imgData = canvas.toDataURL('image/png');
+
+      const filename = carNumber ? `parkping-${carNumber.toLowerCase()}.pdf` : `parkping-${id.slice(0, 8)}.pdf`;
+
+      // Set PDF layout to 4x5 inches for 300 DPI sticker aspect ratio
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'in',
+        format: [4, 5]
+      });
+
+      pdf.addImage(imgData, 'PNG', 0, 0, 4, 5);
+      pdf.save(filename);
+      triggerNotice('Printable sticker PDF downloaded successfully.');
+    } catch (err) {
+      console.error(err);
+      triggerNotice('Error exporting sticker PDF.', 'error');
     }
   };
 
@@ -256,7 +411,7 @@ export default function DashboardClient({
               <QrCode className="w-4 h-4 text-blue-400" />
             </div>
             <div>
-              <div className="text-3xl font-extrabold text-white">{stats.total}</div>
+              <div className="text-3xl font-extrabold text-white">{currentStats.total}</div>
               <p className="text-[10px] text-slate-500 mt-1">Generated barcodes</p>
             </div>
           </div>
@@ -269,9 +424,9 @@ export default function DashboardClient({
               <Check className="w-4 h-4 text-teal-400" />
             </div>
             <div>
-              <div className="text-3xl font-extrabold text-white">{stats.active}</div>
+              <div className="text-3xl font-extrabold text-white">{currentStats.active}</div>
               <p className="text-[10px] text-teal-500 mt-1 font-medium">
-                {stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}% Active Rate
+                {currentStats.total > 0 ? Math.round((currentStats.active / currentStats.total) * 100) : 0}% Active Rate
               </p>
             </div>
           </div>
@@ -284,7 +439,7 @@ export default function DashboardClient({
               <Plus className="w-4 h-4 text-amber-400" />
             </div>
             <div>
-              <div className="text-3xl font-extrabold text-white">{stats.unregistered}</div>
+              <div className="text-3xl font-extrabold text-white">{currentStats.unregistered}</div>
               <p className="text-[10px] text-slate-500 mt-1">Awaiting scanner setup</p>
             </div>
           </div>
@@ -297,7 +452,7 @@ export default function DashboardClient({
               <X className="w-4 h-4 text-red-400" />
             </div>
             <div>
-              <div className="text-3xl font-extrabold text-white">{stats.inactive}</div>
+              <div className="text-3xl font-extrabold text-white">{currentStats.inactive}</div>
               <p className="text-[10px] text-slate-500 mt-1">Blocked / Disabled</p>
             </div>
           </div>
@@ -310,7 +465,7 @@ export default function DashboardClient({
               <BarChart3 className="w-4 h-4 text-fuchsia-400" />
             </div>
             <div>
-              <div className="text-3xl font-extrabold text-white">{stats.totalScans}</div>
+              <div className="text-3xl font-extrabold text-white">{currentStats.totalScans}</div>
               <p className="text-[10px] text-slate-500 mt-1">All-time scan views</p>
             </div>
           </div>
@@ -456,9 +611,18 @@ export default function DashboardClient({
                           <button
                             onClick={() => handleDownloadPNG(item.id, item.car_number)}
                             className="p-2 rounded-xl bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-amber-400 transition-colors cursor-pointer"
-                            title="Download QR code sticker PNG"
+                            title="Download 300 DPI Sticker PNG"
                           >
                             <Download className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* PDF Download */}
+                          <button
+                            onClick={() => handleDownloadPDF(item.id, item.car_number)}
+                            className="p-2 rounded-xl bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-red-400 transition-colors cursor-pointer"
+                            title="Download Printable Sticker PDF"
+                          >
+                            <FileDown className="w-3.5 h-3.5" />
                           </button>
 
                           {/* Toggle Switch */}
